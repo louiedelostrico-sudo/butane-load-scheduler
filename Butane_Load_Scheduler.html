@@ -1411,5 +1411,63 @@ function renderAll() {
 weekStart = Math.max(0, TODAY_IDX-3);
 renderAll();
 </script>
+<script>
+(function() {
+  var PASS = "DispatchCAB2026";
+  var KEY  = "bls_auth";
+  if (sessionStorage.getItem(KEY) === "1") return;
+  // Build overlay
+  var ov = document.createElement("div");
+  ov.id = "pw-overlay";
+  ov.style.cssText = [
+    "position:fixed;inset:0;z-index:99999;display:flex;align-items:center",
+    "justify-content:center;background:#0d0d1a;font-family:sans-serif"
+  ].join(";");
+  ov.innerHTML = `
+    <div style="background:#16213e;border:1px solid #2a3a5c;border-radius:14px;
+                padding:44px 48px;width:340px;text-align:center;box-shadow:0 8px 40px #000a">
+      <div style="font-size:2rem;margin-bottom:6px;">🔒</div>
+      <h2 style="color:#f0a500;margin:0 0 6px;font-size:1.3rem;letter-spacing:.04em">
+        Butane Load Scheduler</h2>
+      <p style="color:#888;font-size:.85rem;margin:0 0 24px">Enter password to continue</p>
+      <input id="pw-input" type="password" placeholder="Password"
+        style="width:100%;box-sizing:border-box;padding:11px 14px;border-radius:8px;
+               border:2px solid #2a3a5c;background:#0f1e36;color:#e0e0e0;
+               font-size:1rem;outline:none;margin-bottom:14px;transition:border .2s"
+        onkeydown="if(event.key==='Enter')document.getElementById('pw-btn').click()"
+        onfocus="this.style.borderColor='#4caf9e'" onblur="this.style.borderColor='#2a3a5c'">
+      <div id="pw-err" style="color:#ff4444;font-size:.82rem;min-height:18px;margin-bottom:10px"></div>
+      <button id="pw-btn"
+        style="width:100%;padding:12px;border-radius:8px;border:none;
+               background:#4caf9e;color:#fff;font-size:1rem;font-weight:700;
+               cursor:pointer;letter-spacing:.04em;transition:background .2s"
+        onmouseover="this.style.background='#3d9e8e'"
+        onmouseout="this.style.background='#4caf9e'"
+        onclick="(function(){
+          var v=document.getElementById('pw-input').value;
+          if(v==='DispatchCAB2026'){
+            sessionStorage.setItem('bls_auth','1');
+            document.getElementById('pw-overlay').remove();
+          } else {
+            var e=document.getElementById('pw-err');
+            e.textContent='Incorrect password. Try again.';
+            var inp=document.getElementById('pw-input');
+            inp.value='';
+            inp.style.borderColor='#ff4444';
+            inp.style.animation='shake .4s';
+            setTimeout(function(){inp.style.animation='';inp.style.borderColor='#2a3a5c';},500);
+          }
+        })()">Unlock</button>
+    </div>
+    <style>
+      @keyframes shake {
+        0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)}
+        40%,80%{transform:translateX(8px)}
+      }
+    </style>`;
+  document.body.appendChild(ov);
+  setTimeout(function(){ document.getElementById("pw-input").focus(); }, 50);
+})();
+</script>
 </body>
 </html>
