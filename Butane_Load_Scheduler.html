@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Butane Load Scheduler – March 2026</title>
+<style>
+:root {
+  --bg:#1a1a2e; --card:#16213e; --accent:#0f3460;
+  --teal:#4caf9e; --gold:#f0a500; --red:#ff4444; --orange:#ff6b35;
+  --text:#e0e0e0; --muted:#888; --border:#2a3a5c;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;min-height:100vh;}
+h1{text-align:center;padding:16px;color:var(--teal);font-size:1.4em;letter-spacing:1px;}
+
+/* Site tabs */
+.site-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;justify-content:center;}
+.site-tab{background:var(--accent);border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:.85em;transition:all .2s;color:var(--muted);}
+.site-tab.active{background:var(--teal);color:#000;font-weight:700;border-color:var(--teal);}
+
+/* Summary bar */
+.summary-bar{background:var(--accent);border-radius:8px;margin:0 12px 8px;padding:10px 16px;font-size:.83em;display:flex;gap:20px;flex-wrap:wrap;align-items:center;}
+.summary-bar .stat{color:var(--muted);}
+.summary-bar .stat span{color:var(--text);font-weight:700;}
+.summary-bar .stat.warn span{color:var(--red);}
+.summary-bar .stat.ok span{color:var(--teal);}
+
+/* Week nav */
+.week-nav{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;}
+.week-nav button{background:var(--accent);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.9em;}
+.week-nav button:hover{background:var(--teal);color:#000;}
+.week-label{font-size:.9em;color:var(--muted);min-width:220px;text-align:center;}
+
+/* Day cards */
+.day-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:0 12px 12px;}
+.day-card{background:var(--card);border:2px solid var(--border);border-radius:10px;padding:10px 8px;cursor:pointer;transition:all .2s;position:relative;min-height:110px;}
+.day-card:hover{border-color:var(--teal);transform:translateY(-2px);}
+.day-card.today{border-color:var(--gold)!important;}
+.day-card.selected{border-color:var(--teal)!important;background:#1a2f4a;}
+.day-card.at-capacity{border-color:var(--red)!important;}
+.day-name{font-size:.7em;color:var(--muted);margin-bottom:2px;}
+.day-date{font-size:.92em;font-weight:700;margin-bottom:5px;}
+.day-date.today-lbl{color:var(--gold);}
+.level-bar-wrap{height:6px;background:#0a0a1a;border-radius:3px;overflow:hidden;margin-bottom:4px;}
+.level-bar{height:100%;border-radius:3px;transition:width .3s;}
+.day-stats{font-size:.72em;color:var(--muted);line-height:1.5;}
+.day-stats span{color:var(--text);}
+.day-stats .burn-rate{color:#a0c4ff;}
+.badge-wrap{position:absolute;top:5px;right:5px;display:flex;flex-direction:column;gap:2px;align-items:flex-end;}
+.load-badge{background:var(--teal);color:#000;border-radius:10px;font-size:.62em;font-weight:700;padding:1px 6px;}
+.full-badge{background:var(--red);color:#fff;border-radius:10px;font-size:.6em;font-weight:700;padding:1px 5px;}
+
+/* Detail panel */
+.detail-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;margin:0 12px 16px;padding:16px;display:none;}
+.detail-panel.visible{display:block;}
+.detail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:10px;}
+.detail-title{font-size:1.1em;font-weight:700;}
+.detail-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:.82em;font-weight:600;transition:all .2s;}
+.btn-teal{background:var(--teal);color:#000;}
+.btn-teal:hover{background:#3d9e8e;}
+.btn-gold{background:var(--gold);color:#000;}
+.btn-gold:hover{background:#d4911a;}
+.btn-muted{background:var(--accent);color:var(--text);border:1px solid var(--border);}
+.btn-muted:hover{background:var(--border);}
+
+/* Burn rate editor */
+.burn-editor{
+  background:#0f2040; border:1px solid var(--border); border-radius:9px;
+  padding:10px 14px; margin-bottom:14px;
+  display:flex; align-items:center; flex-wrap:wrap; gap:12px;
+}
+.burn-editor label{font-size:.82em;color:var(--muted);}
+.burn-editor .burn-inputs{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.burn-input-group{display:flex;align-items:center;gap:5px;background:var(--accent);border:1px solid var(--border);border-radius:7px;padding:4px 10px;}
+.burn-input-group span{font-size:.78em;color:var(--muted);}
+.burn-input{background:transparent;border:none;color:var(--teal);font-size:.95em;font-weight:700;width:70px;text-align:right;outline:none;}
+.burn-input:focus{color:#fff;}
+.burn-unit{font-size:.78em;color:var(--muted);margin-left:2px;}
+.burn-reset{background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:.75em;padding:3px 8px;cursor:pointer;}
+.burn-reset:hover{color:var(--text);border-color:var(--text);}
+.burn-override-note{font-size:.75em;color:var(--gold);display:none;}
+.burn-override-note.visible{display:inline;}
+
+/* Capacity alert bar */
+.capacity-bar{
+  border-radius:8px; padding:8px 12px; margin-bottom:12px;
+  font-size:.82em; display:none; align-items:center; gap:8px;
+}
+.capacity-bar.visible{display:flex;}
+.capacity-bar.warn{background:#3a1a0a;border:1px solid var(--orange);color:var(--orange);}
+.capacity-bar.full{background:#2a0a0a;border:1px solid var(--red);color:var(--red);}
+
+/* Hour table */
+.hour-table{width:100%;border-collapse:collapse;font-size:.81em;}
+.hour-table th{background:var(--accent);padding:6px 8px;text-align:center;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);}
+.hour-table td{padding:5px 8px;border-bottom:1px solid #1a2a40;text-align:center;vertical-align:middle;}
+.hour-table tr:hover td{background:#1e2d4a;}
+.level-cell{font-weight:700;}
+.change-cell{font-size:.8em;}
+.bar-cell{width:100px;}
+.mini-bar-wrap{height:14px;background:#0a0a1a;border-radius:3px;overflow:hidden;position:relative;}
+.mini-bar{height:100%;border-radius:3px;}
+.mini-bar-wrap .cap-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);opacity:.7;}
+.action-cell{min-width:120px;}
+.add-btn{background:var(--teal);color:#000;border:none;border-radius:5px;padding:3px 11px;cursor:pointer;font-size:.8em;font-weight:700;transition:all .2s;}
+.add-btn:hover{background:#3d9e8e;}
+.add-btn:disabled{background:#1a3a3a;color:#3a7a6a;cursor:not-allowed;border:1px dashed #3a7a6a;}
+.remove-btn{background:var(--red);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:.8em;font-weight:700;}
+.remove-btn:hover{background:#cc2222;}
+.hist-badge{background:#1a4a3a;color:var(--teal);border-radius:4px;padding:2px 8px;font-size:.8em;font-weight:700;}
+.drv-name{display:inline-block;margin-left:6px;font-size:.75rem;color:#aef;font-weight:600;white-space:nowrap;}
+.drv-input{background:transparent;border:none;border-bottom:1px solid #4a7aaf;color:#aef;font-size:.75rem;font-weight:600;width:110px;margin-left:6px;padding:1px 2px;outline:none;}
+.drv-input::placeholder{color:#556;font-weight:400;}
+.drv-input:focus{border-bottom-color:#6ab4ff;color:#ddf;}
+.plan-badge{background:#1a3a5a;color:#6ab4ff;border-radius:4px;padding:2px 8px;font-size:.8em;font-weight:700;}
+.conflict-badge{background:#4a2a00;color:#ffaa33;border-radius:4px;padding:2px 8px;font-size:.78em;font-weight:700;margin-left:6px;}
+.block-reason{font-size:.72em;color:var(--orange);display:block;margin-top:2px;}
+.warn-row td{color:var(--red)!important;}
+.over-row td{background:#2a1010!important;}
+.time-cell{color:var(--muted);font-size:.85em;}
+.cap-pct{font-size:.75em;color:var(--muted);}
+
+/* Legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px;padding:8px 12px;font-size:.75em;}
+.legend-item{display:flex;align-items:center;gap:4px;}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.data-note{text-align:center;font-size:.72em;color:var(--muted);padding:4px 0 12px;}
+
+/* Tooltip */
+[data-tip]{position:relative;}
+[data-tip]:hover::after{
+  content:attr(data-tip);
+  position:absolute;bottom:110%;left:50%;transform:translateX(-50%);
+  background:#000;color:#fff;font-size:.75em;white-space:nowrap;
+  border-radius:5px;padding:4px 8px;pointer-events:none;z-index:100;
+  border:1px solid var(--border);
+}
+</style>
+</head>
+<body>
+<h1>🛢 Butane Load Scheduler — March 2026</h1>
+
+<div class="site-tabs" id="siteTabs"></div>
+
+<div class="summary-bar" id="summaryBar">
+  <div class="stat">Site: <span id="sumSite">—</span></div>
+  <div class="stat" id="sumLevelStat">Level Now: <span id="sumLevel">—</span></div>
+  <div class="stat">Burn: <span id="sumBurnHr">—</span> m³/hr · <span id="sumBurnDay">—</span> m³/day</div>
+  <div class="stat">Planned: <span id="sumPlanned">0</span> loads</div>
+  <div class="stat">High Limit: <span id="sumHigh">—</span> m³</div>
+  <div class="stat" id="sumCapStat" style="display:none">⚠ <span id="sumCap"></span></div>
+</div>
+
+<div class="week-nav">
+  <button onclick="shiftWeek(-1)">◀ Prev Week</button>
+  <div class="week-label" id="weekLabel"></div>
+  <button onclick="shiftWeek(1)">Next Week ▶</button>
+</div>
+
+<div class="day-grid" id="dayGrid"></div>
+<div class="detail-panel" id="detailPanel"></div>
+<div class="legend" id="zoneLegend"></div>
+<div class="data-note">Data as of Mar 17, 2026 · Sheet: CAB Sites Levels Trackers (Mar–Dec 2026) · v4 – corrected burn rates</div>
+
+<script>
+
+const SITES = {
+  CCL: {
+    key:"CCL", name:"Cenovus Christina Lake",
+    highLevel:661.5, lowLevel:113.4, safeHigh:660, safeLow:130, absMax:800, loadSize:60,
+    zones:[
+      {max:130,  color:"#ff4444",label:"Dangerously Low"},
+      {max:567,  color:"#4caf9e",label:"Safe Zone"},
+      {max:660,  color:"#f0a500",label:"Nearly Full"},
+      {max:661.5,color:"#ffd700",label:"High Level"},
+      {max:800,  color:"#ff6b35",label:"Above Limit"},
+      {max:9999, color:"#cc0000",label:"OVER MAX"}
+    ]
+  },
+  KN: {
+    key:"KN", name:"CNRL Kirby North",
+    highLevel:339.29, lowLevel:20, safeHigh:339, safeLow:110, absMax:460, loadSize:60,
+    zones:[
+      {max:110,   color:"#ff4444",label:"Dangerously Low"},
+      {max:251,   color:"#4caf9e",label:"Safe Zone"},
+      {max:339,   color:"#f0a500",label:"Nearly Full"},
+      {max:339.29,color:"#ffd700",label:"High Level"},
+      {max:460,   color:"#ff6b35",label:"Above Limit"},
+      {max:9999,  color:"#cc0000",label:"OVER MAX"}
+    ]
+  },
+  KS: {
+    key:"KS", name:"CNRL Kirby South",
+    highLevel:374.4, lowLevel:20, safeHigh:374, safeLow:110, absMax:500, loadSize:60, singleBullet:true,
+    zones:[
+      {max:110,  color:"#ff4444",label:"Dangerously Low"},
+      {max:280,  color:"#4caf9e",label:"Safe Zone"},
+      {max:374,  color:"#f0a500",label:"Nearly Full"},
+      {max:374.4,color:"#ffd700",label:"High Level"},
+      {max:500,  color:"#ff6b35",label:"Above Limit"},
+      {max:9999, color:"#cc0000",label:"OVER MAX"}
+    ]
+  },
+  ORN: {
+    key:"ORN", name:"Strathcona Orion",
+    highLevel:169, lowLevel:25, safeHigh:155, safeLow:25, absMax:169, loadSize:60, singleBullet:true,
+    zones:[
+      {max:25,  color:"#ff4444",label:"Dangerously Low"},
+      {max:95,  color:"#4caf9e",label:"Safe Zone"},
+      {max:155, color:"#f0a500",label:"Nearly Full"},
+      {max:169, color:"#ffd700",label:"High Level"},
+      {max:9999,color:"#cc0000",label:"OVER MAX"}
+    ]
+  },
+  LEI: {
+    key:"LEI", name:"AOC Leismer",
+    highLevel:350, lowLevel:75, safeHigh:349, safeLow:120, absMax:350, loadSize:60, singleBullet:true,
+    zones:[
+      {max:120, color:"#ff4444",label:"Dangerously Low"},
+      {max:290, color:"#4caf9e",label:"Safe Zone"},
+      {max:349, color:"#f0a500",label:"Nearly Full"},
+      {max:350, color:"#ffd700",label:"High Level"},
+      {max:9999,color:"#cc0000",label:"OVER MAX"}
+    ]
+  },
+  HNG: {
+    key:"HNG", name:"AOC Hangingstone",
+    highLevel:180, lowLevel:20, safeHigh:179, safeLow:120, absMax:190, loadSize:60, singleBullet:true,
+    zones:[
+      {max:120, color:"#ff4444",label:"Dangerously Low"},
+      {max:156, color:"#4caf9e",label:"Safe Zone"},
+      {max:179, color:"#f0a500",label:"Nearly Full"},
+      {max:180, color:"#ffd700",label:"High Level"},
+      {max:9999,color:"#cc0000",label:"OVER MAX"}
+    ]
+  },
+  HW: {
+    key:"HW", name:"Secure Headwater",
+    highLevel:206, lowLevel:60, safeHigh:150, safeLow:60, absMax:206, loadSize:60, singleBullet:true,
+    zones:[
+      {max:60,  color:"#ff4444",label:"Dangerously Low"},
+      {max:150, color:"#4caf9e",label:"Safe Zone"},
+      {max:206, color:"#f0a500",label:"Nearly Full"},
+      {max:9999,color:"#cc0000",label:"OVER MAX"}
+    ]
+  }
+};
+
+const EMBEDDED_DATA = {
+  CCL: {
+    'Mar 1': {lv:676.4,br:17.72,loads:{3:60.0,10:60.0,12:120.0,13:60.0},drivers:{3:"Chris",10:"Tom",12:"Warren/Don",13:"Tarek",19:"Ali"}},
+    'Mar 2': {lv:551.2,br:20.41,loads:{9:60.0,10:60.0,11:60.0,12:120.0,15:60.0,19:60.0},drivers:{9:"Don",10:"Tom",11:"Dale H",12:"Warren / Ali",15:"Rajesh",19:"Ali"}},
+    'Mar 3': {lv:481.4,br:19.73,loads:{1:60.0,9:60.0,10:60.0,11:60.0,12:60.0,15:60.0,16:60.0,19:120.0},drivers:{1:"Jagjeet",8:"Tom",9:"Tom",10:"Hassan",11:"Dale H",12:"Warren",15:"Harpreet",16:"Abhilash",19:"Ali / Jay K"}},
+    'Mar 4': {lv:547.9,br:22.11,loads:{9:60.0,11:60.0,12:60.0,13:60.0,14:60.0,15:60.0,17:120.0,18:60.0},drivers:{4:"Rampal",9:"Tom",11:"Dale",12:"Warren",13:"Don",14:"Rampal",15:"Brian",17:"Karanveer / Evguani",18:"Harpreet"}},
+    'Mar 5': {lv:557.2,br:23.58,loads:{8:60.0,11:60.0,12:60.0,13:60.0,16:60.0,17:60.0,18:120.0},drivers:{3:"Rampal",8:"Tom",11:"Dale",12:"Warren",13:"Don",16:"Rampal",17:"Jagvinder",18:"Segun"}},
+    'Mar 6': {lv:471.3,br:24.71,loads:{8:60.0,10:60.0,11:60.0,13:60.0,14:60.0,16:60.0,18:60.0,19:120.0},drivers:{3:"Kamal",8:"Doug",10:"Garry S",11:"Dale",13:"Don",14:"Victor",15:"Rampal Trailer issues",16:"Brian",18:"Segun",19:"Jay K/Rampal"}},
+    'Mar 7': {lv:418.3,br:22.68,loads:{3:60.0,8:60.0,9:60.0,10:60.0,12:60.0,15:60.0,16:60.0,17:60.0,18:60.0,19:60.0},drivers:{3:"Kamal",8:"Doug",9:"Don",10:"Dale",12:"Garry J",15:"Victor",16:"Brian",17:"Rampal",18:"Segun",19:"Jay K"}},
+    'Mar 8': {lv:473.9,br:17.14,loads:{3:60.0,9:60.0,10:60.0,12:60.0,13:60.0,20:60.0},drivers:{3:"Kamal",9:"Don",10:"Tom",12:"Garry J",13:"Warren",15:"Jay S",16:"Brian",17:"Jagjeet",19:"Brian pulled over",20:"Jagjeet",23:"Segun pulled over"}},
+    'Mar 9': {lv:422.5,br:19.24,loads:{3:60.0,7:60.0,9:60.0,10:60.0,11:60.0,12:60.0,13:60.0,14:60.0,15:120.0,18:120.0},drivers:{3:"Kamal",7:"Segun 5930",9:"Don",10:"Tom",11:"Dale",12:"Warren",13:"Mo",14:"Brian M",15:"Jay S/Evguani",18:"Charn/Micheal",20:"Jay K",23:"Segun"}},
+    'Mar 10': {lv:680.7,br:20.77,loads:{3:60.0,7:60.0,8:60.0,11:60.0,12:60.0,15:60.0,23:60.0},drivers:{3:"Kamal",7:"Segun",8:"Thom P",11:"Dale",12:"Warren",15:"Jay S",22:"Rampal",23:"Ali"}},
+    'Mar 11': {lv:602.3,br:18.14,loads:{0:60.0,9:60.0,10:60.0,11:60.0,12:60.0,15:120.0,18:60.0},drivers:{0:"Segun",9:"Thom P",10:"Rampal",11:"Dale",12:"Warren",15:"Charn / Michael Olude",18:"Brian Mott"}},
+    'Mar 12': {lv:647.0,br:19.65,loads:{3:60.0,8:60.0,9:60.0,11:50.0,12:10.0,15:120.0,16:60.0,18:60.0},drivers:{3:"Jagjeet",8:"Thom P",9:"Warren",11:"Dale",12:"Dale / Michael Culp / Gurbir",15:"Michael Culp / Gurbir",16:"Brian",18:"Don"}},
+    'Mar 13': {lv:655.5,br:19.73,loads:{2:60.0,3:60.0,8:60.0,10:60.0,14:120.0,16:60.0,19:60.0,20:60.0},drivers:{2:"Chris B",3:"Jagjeet",8:"Rampal",10:"Dale",14:"Charn / Michael O",16:"Brian",19:"Michael Culp",20:"Don"}},
+    'Mar 14': {lv:721.9,br:19.23,loads:{2:60.0,8:60.0,9:60.0,14:60.0,16:120.0,18:60.0,21:60.0},drivers:{2:"Chris B",8:"Rampal / Doug",14:"Brian",16:"Karanveer / Evguani",18:"Don",20:"Michael C"}},
+    'Mar 15': {lv:740.4,br:18.51,loads:{1:60.0,2:60.0,8:60.0,10:60.0,12:60.0,14:60.0,18:60.0,19:60.0},drivers:{1:"Kamal",2:"Chris B",6:"Segun",8:"Doug",10:"Tom",12:"Warren",14:"Brian",18:"Amandeep",19:"Don"}},
+    'Mar 16': {lv:776.1,br:18.67,loads:{1:60.0,2:60.0,8:60.0,10:60.0,11:30.0,12:30.0,18:60.0,19:60.0},drivers:{1:"Kamal",2:"Chris B",8:"Doug",10:"Tom",12:"Warren",18:"Amandeep",19:"Don"}},
+    'Mar 17': {lv:748.0,br:16.18,loads:{9:60.0,10:60.0,12:60.0,16:60.0,18:60.0,19:60.0},drivers:{9:"Kamal",10:"Tom",12:"Warren",16:"Michael Culp",18:"Chris B",19:"Don"}},
+    'Mar 18': {lv:719.8,br:13.15,loads:{9:60.0,10:60.0,12:60.0,15:60.0,16:60.0,17:60.0},drivers:{0:"Kamal",9:"Kamal",10:"Tom",12:"Warren",15:"Karanveer",16:"Harbir",17:"Brian",22:"Chris B"}},
+    'Mar 19': {lv:764.1,br:11.25,loads:{10:60.0,13:60.0,15:60.0},drivers:{0:"Kamal",10:"Tom",13:"Warren",15:"Gurbir"}},
+    'Mar 20': {lv:674.0,br:15.11,loads:{5:30.0,6:30.0,9:60.0,12:60.0,17:20.0,18:40.0},drivers:{5:"Don",9:"Thomas",12:"Sunny",17:"Michael C"}},
+    'Mar 21': {lv:551.3,br:14.52,loads:{8:120.0,9:60.0,12:60.0,13:60.0,16:60.0,18:60.0},drivers:{8:"Johal/Navpreet",9:"Don",12:"Sunny",13:"Garry J",16:"Brian",18:"Kaila"}},
+    'Mar 22': {lv:622.9,br:17.53,loads:{3:60.0,8:120.0,11:60.0,12:60.0,16:60.0,22:60.0},drivers:{3:"Chris B",8:"Johal/Navpreet",11:"Garry S",12:"Warren",16:"Brian",22:"Hassan"}},
+    'Mar 23': {lv:622.2,br:16.12,loads:{5:60.0,6:60.0,10:60.0,11:120.0,12:60.0,14:60.0,16:60.0,22:60.0},drivers:{5:"Don",6:"Doug",9:"Jay K",10:"Thomas",11:"DALE / Jay K",12:"Warren",14:"Mo",16:"Brian",22:"Hassan"}},
+    'Mar 24': {lv:775.3,br:13.68,loads:{5:60.0,10:60.0,11:60.0,12:60.0},drivers:{5:"Don",10:"Thomas",11:"Dale",12:"Warren",16:"Brian",19:"Charn Mangat",22:"Hassan"}},
+    'Mar 25': {lv:687.0,br:13.14,loads:{10:60.0,11:60.0,13:60.0,14:60.0,16:60.0,22:60.0},drivers:{4:"Rampal",5:"Don",10:"Thomas",11:"Dale",13:"Don",14:"Warren",16:"Brian",20:"Kamal",22:"Hassan"}},
+    'Mar 26': {lv:731.6,br:13.03,loads:{8:30.0,9:30.0,10:60.0,12:60.0,15:60.0},drivers:{9:"Thomas",10:"Dale",12:"Warren",15:"Don"}},
+    'Mar 27': {lv:658.8,br:12.19,loads:{9:60.0,10:60.0,12:60.0,14:60.0},drivers:{7:"Doug",9:"Doug",10:"Dale",12:"Sunny",14:"GARRY J / Harpreet"}},
+    'Mar 28': {lv:606.2,br:13.7,loads:{9:60.0,11:60.0,12:60.0,14:60.0,17:60.0,22:60.0},drivers:{9:"Mo A",11:"Dale",12:"Sunny",14:"Harpreet",17:"Brian M"}},
+    'Mar 29': {lv:637.5,br:17.65,loads:{4:120.0,6:60.0,10:120.0,12:60.0,18:60.0},drivers:{4:"Don A / Chris B",6:"Segun",8:"Johal / Karan",10:"Sunny / Tom P",12:"Warren",18:"Brian M"}},
+    'Mar 30': {lv:633.8,br:15.0,loads:{4:60.0,8:60.0,9:60.0,10:60.0,12:60.0,15:60.0,16:60.0,18:60.0},drivers:{4:"Don A",9:"Tom P",12:"Warren",18:"Brian M"}},
+    'Mar 31': {lv:753.8,br:14.32,loads:{3:60.0,4:60.0},drivers:{}},
+    'Apr 1': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 2': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 3': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 4': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 5': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 6': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 7': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 8': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 9': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 10': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 11': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 12': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 13': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 14': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 15': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 16': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 17': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 18': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 19': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 20': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 21': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 22': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 23': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 24': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 25': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 26': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 27': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 28': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 29': {lv:null,br:17.37,loads:{},drivers:{}},
+    'Apr 30': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 1': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 2': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 3': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 4': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 5': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 6': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 7': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 8': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 9': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 10': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 11': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 12': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 13': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 14': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 15': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 16': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 17': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 18': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 19': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 20': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 21': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 22': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 23': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 24': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 25': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 26': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 27': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 28': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 29': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 30': {lv:null,br:17.37,loads:{},drivers:{}},
+    'May 31': {lv:null,br:17.37,loads:{},drivers:{}},
+  },
+  KN: {
+    'Mar 1': {lv:292.2,br:12.92,loads:{11:30.0,12:30.0,15:60.0,17:30.0,18:90.0,19:60.0},drivers:{10:"Kaila",12:"Kaila",15:"Charn",17:"Greg Bws",18:"Parveen",19:"Abhiash"}},
+    'Mar 2': {lv:282.2,br:10.57,loads:{11:60.0,14:60.0,15:60.0,18:60.0},drivers:{11:"Tarek",14:"Karanveer",15:"Evguani",18:"Greg Bws"}},
+    'Mar 3': {lv:268.5,br:11.04,loads:{12:60.0,14:60.0,17:60.0,18:60.0},drivers:{11:"Sunny",12:"Mo A",14:"Garry S",17:"Greg Bws",18:"Jashandeep",21:"Rajesh"}},
+    'Mar 4': {lv:243.5,br:11.33,loads:{8:20.0,9:40.0,12:60.0,13:120.0,17:30.0,18:30.0},drivers:{9:"Rajesh",12:"Sunny",13:"Michael / Charn",17:"Greg Bws",18:"Barry F called in sick"}},
+    'Mar 5': {lv:271.6,br:7.16,loads:{10:20.0,13:60.0,17:20.0,18:40.0},drivers:{10:"Hassan -",13:"Kaila",17:"Greg Bws",18:"Greg Bws"}},
+    'Mar 6': {lv:239.8,br:6.35,loads:{12:60.0,16:60.0,18:60.0},drivers:{12:"Lal",15:"Kanwar",16:"Harpreet 5745",18:"Kanwar"}},
+    'Mar 7': {lv:267.4,br:8.09,loads:{12:60.0,13:60.0,15:60.0,18:60.0},drivers:{9:"Garry S",12:"Hassan",13:"Vlad",15:"Sunny",18:"Greg Burner"}},
+    'Mar 8': {lv:313.2,br:5.57,loads:{13:60.0,18:60.0},drivers:{13:"Vlad",18:"Greg Burner"}},
+    'Mar 9': {lv:299.6,br:5.6,loads:{9:60.0,13:60.0},drivers:{9:"Rajesh",13:"Vlad",17:"Greg"}},
+    'Mar 10': {lv:285.1,br:12.12,loads:{9:60.0,12:40.0,15:80.0,20:120.0},drivers:{9:"Rajesh",12:"Sunny",15:"Vlad",20:"Gurbir/Mike C"}},
+    'Mar 11': {lv:294.3,br:1.2,loads:{16:60.0},drivers:{16:"Harpreet"}},
+    'Mar 12': {lv:325.5,br:7.16,loads:{9:60.0,12:60.0,16:60.0},drivers:{9:"Rajesh",12:"Sunny",16:"Harbir"}},
+    'Mar 13': {lv:333.7,br:3.93,loads:{13:60.0},drivers:{13:"Karanveer",22:"Parveen"}},
+    'Mar 14': {lv:299.3,br:5.85,loads:{11:60.0,13:60.0,18:60.0},drivers:{11:"Parveen",13:"Garry J",18:"Navi"}},
+    'Mar 15': {lv:339.0,br:6.05,loads:{14:60.0,15:60.0},drivers:{14:"Karanveer",15:"Evgueni",19:"navraj- CANCELLED DUE TO LEVELS"}},
+    'Mar 16': {lv:313.9,br:4.42,loads:{9:60.0,18:60.0},drivers:{9:"Jagvinder",18:"Jagjeet"}},
+    'Mar 17': {lv:327.7,br:2.86,loads:{14:10.0,15:50.0},drivers:{14:"Garry S"}},
+    'Mar 18': {lv:319.0,br:5.2,loads:{10:60.0,11:60.0},drivers:{10:"Michael O",11:"Jay S"}},
+    'Mar 19': {lv:314.3,br:3.56,loads:{15:60.0},drivers:{11:"Sunny 56151",15:"Sunny 56151"}},
+    'Mar 20': {lv:288.8,br:5.72,loads:{12:30.0,15:90.0},drivers:{12:"Garry J",15:"Rajesh"}},
+    'Mar 21': {lv:271.6,br:5.3,loads:{12:60.0,15:60.0},drivers:{12:"Karanveer",15:"Abhilash",20:"Varinder-Pfs"}},
+    'Mar 22': {lv:264.5,br:6.88,loads:{10:40.0,11:10.0,13:50.0,23:60.0},drivers:{10:"Sunny",13:"Harbir",23:"Parveen"}},
+    'Mar 23': {lv:259.5,br:6.5,loads:{9:35.0,12:25.0,14:10.0,15:50.0,23:60.0},drivers:{9:"Michael",14:"Jashandeep",15:"Jashandeep",23:"Parveen"}},
+    'Mar 24': {lv:283.4,br:6.11,loads:{12:60.0,18:60.0},drivers:{12:"Sunny",18:"Balkaran",20:"Dino",23:"Parveen"}},
+    'Mar 25': {lv:256.7,br:7.92,loads:{11:30.0,12:90.0,20:60.0},drivers:{8:"Parveen",10:"Dino",12:"Sunny",20:"Serg"}},
+    'Mar 26': {lv:246.6,br:9.13,loads:{15:60.0,18:60.0,20:60.0,21:40.0,22:20.0},drivers:{2:"Parveen-Rfs",12:"MICHAEL o",14:"Gurbir",15:"MICHAEL o",17:"MICHAEL c",18:"MICHAEL c",20:"Serg",21:"Gurbir"}},
+    'Mar 27': {lv:267.5,br:7.15,loads:{1:60.0,15:50.0,18:10.0,20:60.0},drivers:{1:"Parveen",15:"Karanveer",20:"Rampal"}},
+    'Mar 28': {lv:275.8,br:8.81,loads:{2:60.0,12:60.0,15:60.0,21:60.0},drivers:{2:"Parveen",12:"Garry S",15:"Gurneet",21:"Gurjap"}},
+    'Mar 29': {lv:304.4,br:8.22,loads:{2:60.0,14:40.0,15:20.0,17:60.0},drivers:{2:"Parveen",14:"Garry J",17:"Garry S 56771"}},
+    'Mar 30': {lv:287.1,br:8.5,loads:{3:60.0,5:60.0,17:60.0,23:60.0},drivers:{3:"Vlad 5911",5:"Michael O",17:"Garry S",23:"Navpreet"}},
+    'Mar 31': {lv:323.0,br:8.36,loads:{10:60.0,14:60.0,22:60.0},drivers:{}},
+    'Apr 1': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 2': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 3': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 4': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 5': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 6': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 7': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 8': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 9': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 10': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 11': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 12': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 13': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 14': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 15': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 16': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 17': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 18': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 19': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 20': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 21': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 22': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 23': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 24': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 25': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 26': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 27': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 28': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 29': {lv:null,br:7.08,loads:{},drivers:{}},
+    'Apr 30': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 1': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 2': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 3': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 4': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 5': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 6': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 7': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 8': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 9': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 10': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 11': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 12': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 13': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 14': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 15': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 16': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 17': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 18': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 19': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 20': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 21': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 22': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 23': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 24': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 25': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 26': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 27': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 28': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 29': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 30': {lv:null,br:7.08,loads:{},drivers:{}},
+    'May 31': {lv:null,br:7.08,loads:{},drivers:{}},
+  },
+  KS: {
+    'Mar 1': {lv:302.1,br:4.21,loads:{12:60.0,18:60.0},drivers:{12:"Lal",18:"Frankie"}},
+    'Mar 2': {lv:321.1,br:3.93,loads:{13:60.0},drivers:{13:"Mo A",17:"Parveen move to Nipisi"}},
+    'Mar 3': {lv:286.7,br:4.71,loads:{11:40.0,12:20.0,14:60.0},drivers:{10:"Harbir",14:"Barry F"}},
+    'Mar 4': {lv:293.7,br:4.15,loads:{12:60.0,14:60.0},drivers:{11:"Abhilash",12:"Abhilash",14:"Kaila"}},
+    'Mar 5': {lv:314.0,br:5.36,loads:{12:60.0,18:60.0},drivers:{12:"Abhilash",18:"Rajesh"}},
+    'Mar 6': {lv:305.4,br:4.37,loads:{17:20.0,18:40.0},drivers:{16:"Rajesh"}},
+    'Mar 7': {lv:260.6,br:3.47,loads:{12:60.0,14:20.0,15:40.0},drivers:{12:"Navi",14:"Andrey",15:"Andrey"}},
+    'Mar 8': {lv:297.4,br:6.12,loads:{12:60.0,21:60.0},drivers:{12:"Lal",15:"Jatinder",21:"Jashandeep"}},
+    'Mar 9': {lv:270.5,br:8.37,loads:{10:30.0,12:90.0,17:60.0,21:60.0},drivers:{12:"Parveen",17:"Jashandeep",21:"Cameron"}},
+    'Mar 10': {lv:309.7,br:2.75,loads:{12:60.0,19:30.0},drivers:{12:"Barry F",19:"Jagjeet"}},
+    'Mar 11': {lv:333.7,br:4.09,loads:{12:60.0},drivers:{12:"Sunny"}},
+    'Mar 12': {lv:295.5,br:6.35,loads:{9:60.0,17:60.0,20:60.0},drivers:{9:"Karanveer",17:"Harpreet",20:"Navraj"}},
+    'Mar 13': {lv:323.0,br:4.32,loads:{10:60.0,17:60.0},drivers:{10:"Rajesh",17:"Harinder"}},
+    'Mar 14': {lv:339.3,br:5.06,loads:{9:60.0,16:60.0},drivers:{9:"Rajesh",14:"Charn",16:"Charn"}},
+    'Mar 15': {lv:337.9,br:2.59,loads:{12:60.0},drivers:{12:"Garry J",16:"Jagjeet-CANCELLED DUE TO LEVELS",19:"Jay K-Cancelled Due To Levels"}},
+    'Mar 16': {lv:335.8,br:4.24,loads:{18:60.0},drivers:{18:"Navraj"}},
+    'Mar 17': {lv:294.1,br:7.28,loads:{18:60.0,21:60.0},drivers:{12:"Rampal delivered to wrong site",18:"Rajesh",21:"Parveen"}},
+    'Mar 18': {lv:239.4,br:3.59,loads:{9:60.0,14:50.0,15:10.0,21:60.0},drivers:{9:"Navi",13:"Malkeet",21:"Jay K"}},
+    'Mar 19': {lv:333.3,br:4.7,loads:{10:60.0,18:60.0},drivers:{10:"Navi",18:"Karanver / Mark Groves in CAB"}},
+    'Mar 20': {lv:340.4,br:4.71,loads:{9:60.0,23:60.0},drivers:{5:"Jagjeet",9:"Jagjeet",23:"Michael O"}},
+    'Mar 21': {lv:347.4,br:5.3,loads:{11:10.0,12:50.0,16:60.0},drivers:{11:"Kamal",16:"Evguani"}},
+    'Mar 22': {lv:340.1,br:4.09,loads:{13:60.0},drivers:{13:"Rampal"}},
+    'Mar 23': {lv:301.9,br:4.71,loads:{9:60.0,12:60.0},drivers:{9:"Andrey",12:"Rampal"}},
+    'Mar 24': {lv:308.8,br:4.8,loads:{14:20.0,15:40.0,21:20.0,22:40.0},drivers:{4:"Rampal",11:"Rampal",12:"Garry J",13:"Rampal",21:"Kamal"}},
+    'Mar 25': {lv:313.7,br:4.55,loads:{1:60.0,15:60.0},drivers:{1:"Jagjeet",14:"Navi-Pfs-5831",15:"Navi-Pfs-5831"}},
+    'Mar 26': {lv:324.4,br:4.37,loads:{3:60.0,14:60.0},drivers:{3:"Jagjeet",14:"Navi"}},
+    'Mar 27': {lv:339.5,br:3.76,loads:{1:60.0},drivers:{1:"Jagjeet"}},
+    'Mar 28': {lv:309.2,br:4.43,loads:{7:60.0,15:60.0},drivers:{7:"Shah",15:"Lal",20:"Meg 5743"}},
+    'Mar 29': {lv:322.9,br:4.69,loads:{7:60.0,15:60.0},drivers:{7:"Shah",15:"Kaila 56771"}},
+    'Mar 30': {lv:330.4,br:5.4,loads:{7:60.0,16:60.0},drivers:{7:"Shah",16:"Garry J"}},
+    'Mar 31': {lv:320.9,br:4.53,loads:{5:60.0,13:60.0,23:60.0},drivers:{}},
+    'Apr 1': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 2': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 3': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 4': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 5': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 6': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 7': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 8': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 9': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 10': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 11': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 12': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 13': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 14': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 15': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 16': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 17': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 18': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 19': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 20': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 21': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 22': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 23': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 24': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 25': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 26': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 27': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 28': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 29': {lv:null,br:4.68,loads:{},drivers:{}},
+    'Apr 30': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 1': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 2': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 3': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 4': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 5': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 6': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 7': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 8': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 9': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 10': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 11': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 12': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 13': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 14': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 15': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 16': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 17': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 18': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 19': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 20': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 21': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 22': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 23': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 24': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 25': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 26': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 27': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 28': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 29': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 30': {lv:null,br:4.68,loads:{},drivers:{}},
+    'May 31': {lv:null,br:4.68,loads:{},drivers:{}},
+  },
+  ORN: {
+    'Mar 1': {lv:145.0,br:5.7,loads:{11:20.0,12:40.0},drivers:{11:"Gurneet"}},
+    'Mar 2': {lv:68.3,br:5.8,loads:{8:60.0,12:60.0,22:60.0},drivers:{8:"Jatinder",12:"Gurneet",22:"Alex"}},
+    'Mar 3': {lv:109.1,br:4.92,loads:{11:20.0,12:40.0,15:60.0},drivers:{12:"Gurbir",15:"Daljit"}},
+    'Mar 4': {lv:111.0,br:2.76,loads:{10:60.0,21:60.0},drivers:{10:"Daljit",21:"Alex"}},
+    'Mar 5': {lv:164.7,br:2.33,loads:{18:60.0},drivers:{18:"Alex"}},
+    'Mar 6': {lv:168.7,br:2.71,loads:{},drivers:{}},
+    'Mar 7': {lv:103.6,br:3.52,loads:{0:60.0},drivers:{0:"Ahmed H",12:"Daljit"}},
+    'Mar 8': {lv:79.2,br:6.06,loads:{0:60.0,11:20.0,12:40.0},drivers:{0:"Ahmed H",10:"Garry Sidhu"}},
+    'Mar 9': {lv:53.8,br:6.52,loads:{0:60.0,8:30.0,12:30.0,14:60.0},drivers:{0:"ahmed H",8:"Garry Sidhu",13:"Navraj"}},
+    'Mar 10': {lv:77.4,br:4.89,loads:{0:60.0,12:60.0,18:60.0},drivers:{0:"Ahmed H",12:"Mo",18:"Balkaranjit"}},
+    'Mar 11': {lv:140.1,br:7.6,loads:{9:60.0,16:60.0},drivers:{9:"Malkeet",16:"Kaila"}},
+    'Mar 12': {lv:77.7,br:1.6,loads:{11:35.0,12:25.0,18:60.0},drivers:{9:"Malkeet",18:"Kaila"}},
+    'Mar 13': {lv:159.3,br:3.41,loads:{20:60.0},drivers:{20:"Jatinder"}},
+    'Mar 14': {lv:137.4,br:5.29,loads:{11:60.0,17:10.0,18:50.0},drivers:{10:"Kaila",11:"Kaila",20:"Jatinder"}},
+    'Mar 15': {lv:130.5,br:3.27,loads:{18:60.0},drivers:{10:"Kaila",20:"Gurneet"}},
+    'Mar 16': {lv:111.9,br:7.1,loads:{1:60.0,11:40.0,12:20.0},drivers:{10:"Kaila"}},
+    'Mar 17': {lv:61.5,br:5.38,loads:{9:60.0,12:60.0,20:60.0},drivers:{9:"Gurneet",12:"jagvinder",20:"Jay K"}},
+    'Mar 18': {lv:112.5,br:6.0,loads:{10:60.0,15:60.0},drivers:{10:"Kaila",15:"Hassan 5659"}},
+    'Mar 19': {lv:88.4,br:4.04,loads:{17:20.0,18:40.0},drivers:{18:"Johal"}},
+    'Mar 20': {lv:51.4,br:6.47,loads:{0:60.0,8:60.0,15:60.0},drivers:{0:"Kamal",8:"Malkeet",15:"Kaila"}},
+    'Mar 21': {lv:76.1,br:2.06,loads:{12:60.0,17:20.0,18:40.0},drivers:{12:"Parveen",15:"Segun S"}},
+    'Mar 22': {lv:146.6,br:4.57,loads:{11:20.0,12:40.0},drivers:{}},
+    'Mar 23': {lv:97.0,br:0.3,loads:{7:52.0},drivers:{7:"Harinder",16:"Karanveer"}},
+    'Mar 24': {lv:190.4,br:2.03,loads:{},drivers:{10:"Harinder",20:"Harinder"}},
+    'Mar 25': {lv:141.7,br:5.28,loads:{12:60.0},drivers:{12:"Rampal"}},
+    'Mar 26': {lv:74.9,br:4.54,loads:{1:60.0,12:60.0,17:20.0,18:40.0},drivers:{1:"Parveen",12:"Rampal",15:"Jay"}},
+    'Mar 27': {lv:145.9,br:4.56,loads:{16:25.0,17:35.0,18:60.0},drivers:{11:"Harpreet",16:"Andrey",18:"Harpreet"}},
+    'Mar 28': {lv:156.4,br:5.31,loads:{15:50.0,18:60.0},drivers:{15:"Meg",18:"Jagvinder"}},
+    'Mar 29': {lv:139.0,br:4.34,loads:{14:60.0,18:60.0},drivers:{14:"Meg",18:"Sukhjinder"}},
+    'Mar 30': {lv:154.9,br:4.94,loads:{13:60.0,21:60.0},drivers:{13:"Daljit",21:"Rajesh"}},
+    'Mar 31': {lv:156.4,br:4.74,loads:{13:60.0,21:60.0},drivers:{}},
+    'Apr 1': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 2': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 3': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 4': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 5': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 6': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 7': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 8': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 9': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 10': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 11': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 12': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 13': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 14': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 15': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 16': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 17': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 18': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 19': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 20': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 21': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 22': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 23': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 24': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 25': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 26': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 27': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 28': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 29': {lv:null,br:4.45,loads:{},drivers:{}},
+    'Apr 30': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 1': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 2': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 3': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 4': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 5': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 6': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 7': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 8': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 9': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 10': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 11': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 12': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 13': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 14': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 15': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 16': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 17': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 18': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 19': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 20': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 21': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 22': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 23': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 24': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 25': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 26': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 27': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 28': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 29': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 30': {lv:null,br:4.45,loads:{},drivers:{}},
+    'May 31': {lv:null,br:4.45,loads:{},drivers:{}},
+  },
+  LEI: {
+    'Mar 1': {lv:255.9,br:4.35,loads:{11:40.0,12:20.0,15:60.0},drivers:{11:"Harinder",15:"Simranjot"}},
+    'Mar 2': {lv:271.4,br:4.5,loads:{12:60.0,15:60.0},drivers:{11:"Harinder",12:"Harinder",15:"Simranjot"}},
+    'Mar 3': {lv:283.3,br:4.21,loads:{11:30.0,12:30.0},drivers:{10:"Harinder"}},
+    'Mar 4': {lv:242.2,br:5.0,loads:{11:5.0,12:55.0,15:60.0},drivers:{11:"harbir",15:"Simranjot"}},
+    'Mar 5': {lv:242.3,br:3.89,loads:{11:10.0,12:50.0,13:60.0},drivers:{10:"Daljit",12:"Daljit",13:"Navraj"}},
+    'Mar 6': {lv:268.9,br:3.72,loads:{13:60.0,18:60.0},drivers:{10:"Daljit",13:"Daljit",18:"Simranjot"}},
+    'Mar 7': {lv:299.5,br:7.06,loads:{12:60.0,18:60.0},drivers:{11:"Amandeep",18:"Simranjot"}},
+    'Mar 8': {lv:250.0,br:1.79,loads:{18:60.0,20:60.0},drivers:{11:"Amandeep",20:"Simranjot"}},
+    'Mar 9': {lv:327.1,br:4.2,loads:{18:60.0,19:60.0},drivers:{18:"Amandeep",19:"Simranjot"}},
+    'Mar 10': {lv:346.4,br:4.22,loads:{20:60.0},drivers:{20:"Simranjot"}},
+    'Mar 11': {lv:305.2,br:4.16,loads:{7:60.0,14:60.0},drivers:{7:"Amandeep",14:"Harbir"}},
+    'Mar 12': {lv:325.4,br:4.3,loads:{12:60.0},drivers:{1:"Gurneet",15:"Harbir"}},
+    'Mar 13': {lv:282.1,br:4.36,loads:{18:60.0},drivers:{18:"Simranjot"}},
+    'Mar 14': {lv:237.4,br:4.03,loads:{4:60.0,16:60.0,20:60.0},drivers:{4:"Daljit",16:"Harinder",20:"Simranjot"}},
+    'Mar 15': {lv:320.6,br:2.85,loads:{11:10.0,12:50.0},drivers:{12:"Harbir",16:"Amandeep"}},
+    'Mar 16': {lv:312.3,br:5.12,loads:{8:60.0,12:60.0},drivers:{0:"Simranjot",8:"Simranjot",12:"Harbir"}},
+    'Mar 17': {lv:309.5,br:6.7,loads:{16:60.0,18:60.0},drivers:{16:"Simranjot",18:"Amandeep"}},
+    'Mar 18': {lv:268.7,br:2.69,loads:{15:60.0,18:60.0},drivers:{12:"Gurjap Left YHT at 12:30",15:"Simranjot",18:"Gurjap"}},
+    'Mar 19': {lv:324.1,br:4.54,loads:{17:60.0},drivers:{17:"Simranjot"}},
+    'Mar 20': {lv:275.1,br:4.48,loads:{18:60.0,19:60.0},drivers:{18:"Harinder",19:"Gurneet",23:"Gurjap"}},
+    'Mar 21': {lv:287.6,br:4.95,loads:{12:60.0,21:60.0},drivers:{12:"Gurjap",21:"Gurneet"}},
+    'Mar 22': {lv:288.7,br:5.9,loads:{0:60.0,15:60.0},drivers:{0:"Simranjot",15:"Amandeep"}},
+    'Mar 23': {lv:267.1,br:6.59,loads:{14:60.0,17:20.0,18:40.0,20:60.0},drivers:{13:"Simranjot",14:"Amandeep",18:"Amandeep",20:"Gurneet"}},
+    'Mar 24': {lv:288.9,br:4.56,loads:{0:60.0,17:30.0,18:30.0},drivers:{0:"Simranjot",15:"Amandeep"}},
+    'Mar 25': {lv:299.4,br:4.35,loads:{0:60.0,16:60.0},drivers:{0:"Simranjot",16:"Amandeep"}},
+    'Mar 26': {lv:315.1,br:1.83,loads:{},drivers:{0:"Simranjot",16:"Gurjap",19:"Gurjap-Tractor Down"}},
+    'Mar 27': {lv:271.2,br:4.48,loads:{12:60.0,15:60.0},drivers:{12:"Harinder",15:"Gurneet"}},
+    'Mar 28': {lv:283.7,br:4.25,loads:{13:60.0,16:20.0,18:40.0},drivers:{13:"Harinder",16:"Amandeep"}},
+    'Mar 29': {lv:301.6,br:4.78,loads:{0:60.0,15:60.0},drivers:{0:"Simranjot",13:"Harinder"}},
+    'Mar 30': {lv:306.8,br:5.0,loads:{0:60.0},drivers:{0:"Simranjot"}},
+    'Mar 31': {lv:246.8,br:4.07,loads:{0:60.0,12:60.0,17:60.0},drivers:{}},
+    'Apr 1': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 2': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 3': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 4': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 5': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 6': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 7': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 8': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 9': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 10': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 11': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 12': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 13': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 14': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 15': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 16': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 17': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 18': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 19': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 20': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 21': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 22': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 23': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 24': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 25': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 26': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 27': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 28': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 29': {lv:null,br:4.42,loads:{},drivers:{}},
+    'Apr 30': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 1': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 2': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 3': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 4': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 5': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 6': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 7': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 8': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 9': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 10': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 11': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 12': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 13': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 14': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 15': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 16': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 17': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 18': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 19': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 20': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 21': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 22': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 23': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 24': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 25': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 26': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 27': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 28': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 29': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 30': {lv:null,br:4.42,loads:{},drivers:{}},
+    'May 31': {lv:null,br:4.42,loads:{},drivers:{}},
+  },
+  HNG: {
+    'Mar 1': {lv:148.9,br:4.0,loads:{11:50.0,12:10.0},drivers:{9:"Harbir",20:"Alex"}},
+    'Mar 2': {lv:112.8,br:4.21,loads:{0:60.0,12:60.0},drivers:{0:"Alex",12:"Harbir"}},
+    'Mar 3': {lv:131.7,br:1.02,loads:{15:60.0},drivers:{15:"Simranjot"}},
+    'Mar 4': {lv:167.1,br:2.52,loads:{},drivers:{23:"Amandeep"}},
+    'Mar 5': {lv:106.6,br:4.22,loads:{7:60.0,13:60.0},drivers:{7:"Amandeep",11:"Sunny"}},
+    'Mar 6': {lv:125.2,br:3.95,loads:{12:60.0,13:60.0},drivers:{12:"Vlad",13:"Sunny"}},
+    'Mar 7': {lv:150.3,br:0.3,loads:{},drivers:{}},
+    'Mar 8': {lv:147.8,br:2.77,loads:{11:10.0,12:50.0},drivers:{9:"Harinder",19:"Jay K"}},
+    'Mar 9': {lv:141.4,br:4.12,loads:{17:50.0,18:10.0,20:60.0},drivers:{8:"Jay K",9:"Jay K",15:"Jay K",16:"Jay K",17:"Jagjeet",20:"Jagjeet"}},
+    'Mar 10': {lv:162.6,br:2.81,loads:{10:50.0,12:10.0},drivers:{10:"Garry S"}},
+    'Mar 11': {lv:155.1,br:1.42,loads:{},drivers:{}},
+    'Mar 12': {lv:121.1,br:3.86,loads:{13:60.0,23:60.0},drivers:{13:"Jay S",23:"Johal"}},
+    'Mar 13': {lv:148.5,br:1.41,loads:{21:60.0},drivers:{21:"Johal"}},
+    'Mar 14': {lv:174.7,br:4.09,loads:{12:60.0,22:60.0},drivers:{11:"Jagvinder",12:"Jagvinder",22:"Johal / Navpreet in-CAB"}},
+    'Mar 15': {lv:196.5,br:3.92,loads:{20:60.0},drivers:{20:"Jagvinder"}},
+    'Mar 16': {lv:162.4,br:1.65,loads:{},drivers:{20:"Varinder"}},
+    'Mar 17': {lv:122.7,br:3.56,loads:{13:60.0,15:57.0},drivers:{12:"Varinder",15:"Rampal"}},
+    'Mar 18': {lv:154.2,br:4.02,loads:{6:60.0},drivers:{6:"Sunny"}},
+    'Mar 19': {lv:117.7,br:1.23,loads:{9:60.0},drivers:{9:"Micheal C"}},
+    'Mar 20': {lv:148.1,br:2.2,loads:{13:60.0},drivers:{13:"Jagvinder",21:"Ali 5923"}},
+    'Mar 21': {lv:155.4,br:1.91,loads:{13:60.0},drivers:{13:"Jagvinder"}},
+    'Mar 22': {lv:169.5,br:3.75,loads:{15:60.0},drivers:{11:"Jagvinder-Delayed From Last Night",15:"Jagvinder"}},
+    'Mar 23': {lv:139.6,br:3.47,loads:{1:60.0,17:60.0},drivers:{1:"simranOT",6:"simran",17:"Jagvinder",18:"Jagvinder"}},
+    'Mar 24': {lv:176.4,br:0.54,loads:{},drivers:{}},
+    'Mar 25': {lv:163.4,br:3.26,loads:{12:60.0},drivers:{12:"Sanjay",22:"Ahmed"}},
+    'Mar 26': {lv:145.2,br:3.15,loads:{12:60.0},drivers:{11:"Sunny",12:"Sunny",23:"Ahmed"}},
+    'Mar 27': {lv:129.5,br:1.72,loads:{12:60.0},drivers:{12:"Ahmed"}},
+    'Mar 28': {lv:148.3,br:2.88,loads:{14:60.0},drivers:{14:"Kaila"}},
+    'Mar 29': {lv:139.3,br:3.95,loads:{7:60.0,17:50.0,18:10.0},drivers:{7:"Doug",17:"Amandeep"}},
+    'Mar 30': {lv:164.4,br:0.81,loads:{15:60.0},drivers:{15:"Jagvinder"}},
+    'Mar 31': {lv:205.0,br:2.5,loads:{},drivers:{}},
+    'Apr 1': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 2': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 3': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 4': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 5': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 6': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 7': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 8': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 9': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 10': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 11': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 12': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 13': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 14': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 15': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 16': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 17': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 18': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 19': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 20': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 21': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 22': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 23': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 24': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 25': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 26': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 27': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 28': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 29': {lv:null,br:2.75,loads:{},drivers:{}},
+    'Apr 30': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 1': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 2': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 3': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 4': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 5': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 6': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 7': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 8': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 9': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 10': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 11': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 12': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 13': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 14': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 15': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 16': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 17': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 18': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 19': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 20': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 21': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 22': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 23': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 24': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 25': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 26': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 27': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 28': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 29': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 30': {lv:null,br:2.75,loads:{},drivers:{}},
+    'May 31': {lv:null,br:2.75,loads:{},drivers:{}},
+  },
+  HW: {
+    'Mar 1': {lv:174.3,br:4.6,loads:{14:60.0},drivers:{14:"Sab S"}},
+    'Mar 2': {lv:124.0,br:4.12,loads:{12:60.0},drivers:{2:"Sab S",12:"Sab S",17:"Sukhjinder",23:"Sukhjinder"}},
+    'Mar 3': {lv:85.0,br:5.51,loads:{11:30.0,12:30.0,17:60.0,22:60.0},drivers:{7:"Sab S",11:"Sab S",17:"Alex",22:"Amandeep"}},
+    'Mar 4': {lv:132.8,br:6.75,loads:{8:60.0,18:60.0},drivers:{8:"Sab S",18:"Jagvinder"}},
+    'Mar 5': {lv:90.8,br:3.27,loads:{7:10.0,8:50.0,21:30.0,22:30.0},drivers:{8:"Victor 55232",21:"Gurjap 5.0446"}},
+    'Mar 6': {lv:132.4,br:5.2,loads:{10:60.0,16:10.0,17:50.0},drivers:{8:"Malkeet",10:"Malkeet",13:"Sab S",16:"Sab S",17:"Sab S"}},
+    'Mar 7': {lv:127.6,br:4.73,loads:{9:60.0,16:10.0,17:50.0},drivers:{8:"Navi",9:"Garry S",14:"Harpreet Alta"}},
+    'Mar 8': {lv:134.2,br:4.56,loads:{8:60.0,13:60.0},drivers:{7:"Doug",8:"Doug",13:"Varinder"}},
+    'Mar 9': {lv:144.7,br:3.52,loads:{9:60.0,14:60.0},drivers:{9:"Malkeet",14:"Varinder"}},
+    'Mar 10': {lv:180.1,br:7.96,loads:{0:60.0,17:60.0},drivers:{0:"Dino",14:"Jatinder"}},
+    'Mar 11': {lv:109.0,br:2.18,loads:{9:60.0,21:20.0,22:20.0,23:20.0},drivers:{9:"Tarek",21:"Dino"}},
+    'Mar 12': {lv:176.6,br:4.96,loads:{11:5.0,12:55.0},drivers:{10:"Tarek"}},
+    'Mar 13': {lv:117.6,br:4.83,loads:{8:60.0,13:60.0},drivers:{8:"Malkeet",13:"Victor"}},
+    'Mar 14': {lv:121.8,br:5.17,loads:{8:60.0,13:60.0},drivers:{8:"Padam",13:"Victor"}},
+    'Mar 15': {lv:117.8,br:4.61,loads:{10:60.0,13:60.0},drivers:{10:"Tarek",12:"Tarek",13:"Harinder",16:"victor = pfs",17:"Victor"}},
+    'Mar 16': {lv:127.2,br:4.44,loads:{10:60.0,13:60.0},drivers:{}},
+    'Mar 17': {lv:140.7,br:4.51,loads:{12:60.0},drivers:{}},
+    'Mar 18': {lv:92.5,br:4.26,loads:{11:30.0,12:30.0,17:60.0},drivers:{}},
+    'Mar 19': {lv:110.3,br:4.25,loads:{14:60.0,16:50.0,17:10.0},drivers:{8:"Ali",12:"Ali",14:"Tarek pfs"}},
+    'Mar 20': {lv:128.2,br:5.22,loads:{7:50.0,8:10.0,16:20.0,17:40.0},drivers:{7:"Stephen H",14:"Jatinder"}},
+    'Mar 21': {lv:123.0,br:5.12,loads:{7:60.0,17:60.0},drivers:{7:"Stephen",17:"Sukhjinder"}},
+    'Mar 22': {lv:120.2,br:4.78,loads:{7:60.0,16:40.0,17:20.0},drivers:{7:"Doug",14:"karanveer",15:"Tareek"}},
+    'Mar 23': {lv:125.5,br:5.16,loads:{9:60.0,12:60.0},drivers:{9:"Malkeet",12:"Tareek"}},
+    'Mar 24': {lv:121.7,br:4.2,loads:{12:60.0,14:60.0},drivers:{9:"Tareek",12:"Tareek",14:"Malkeet"}},
+    'Mar 25': {lv:140.8,br:4.27,loads:{9:60.0,14:60.0},drivers:{9:"Tareek",14:"Malkeet"}},
+    'Mar 26': {lv:158.3,br:4.47,loads:{6:60.0,21:60.0},drivers:{6:"Stephen- 5697",15:"Malkeet"}},
+    'Mar 27': {lv:171.0,br:4.81,loads:{18:60.0},drivers:{18:"Sukhjinder"}},
+    'Mar 28': {lv:115.5,br:4.55,loads:{11:50.0,12:10.0,19:60.0},drivers:{10:"Tarek",19:"Ahmed H"}},
+    'Mar 29': {lv:126.2,br:4.93,loads:{10:60.0,15:20.0,17:40.0},drivers:{10:"Tarek",15:"Travis"}},
+    'Mar 30': {lv:127.9,br:5.0,loads:{10:60.0,14:60.0},drivers:{10:"Tarek"}},
+    'Mar 31': {lv:127.9,br:4.75,loads:{9:60.0,14:60.0},drivers:{}},
+    'Apr 1': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 2': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 3': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 4': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 5': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 6': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 7': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 8': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 9': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 10': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 11': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 12': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 13': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 14': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 15': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 16': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 17': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 18': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 19': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 20': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 21': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 22': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 23': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 24': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 25': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 26': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 27': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 28': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 29': {lv:null,br:4.73,loads:{},drivers:{}},
+    'Apr 30': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 1': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 2': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 3': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 4': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 5': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 6': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 7': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 8': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 9': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 10': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 11': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 12': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 13': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 14': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 15': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 16': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 17': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 18': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 19': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 20': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 21': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 22': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 23': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 24': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 25': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 26': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 27': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 28': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 29': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 30': {lv:null,br:4.73,loads:{},drivers:{}},
+    'May 31': {lv:null,br:4.73,loads:{},drivers:{}},
+  },
+};
+
+// ── Constants ────────────────────────────────────────
+const MONTH_DATES = ['Mar 1', 'Mar 2', 'Mar 3', 'Mar 4', 'Mar 5', 'Mar 6', 'Mar 7', 'Mar 8', 'Mar 9', 'Mar 10', 'Mar 11', 'Mar 12', 'Mar 13', 'Mar 14', 'Mar 15', 'Mar 16', 'Mar 17', 'Mar 18', 'Mar 19', 'Mar 20', 'Mar 21', 'Mar 22', 'Mar 23', 'Mar 24', 'Mar 25', 'Mar 26', 'Mar 27', 'Mar 28', 'Mar 29', 'Mar 30', 'Mar 31', 'Apr 1', 'Apr 2', 'Apr 3', 'Apr 4', 'Apr 5', 'Apr 6', 'Apr 7', 'Apr 8', 'Apr 9', 'Apr 10', 'Apr 11', 'Apr 12', 'Apr 13', 'Apr 14', 'Apr 15', 'Apr 16', 'Apr 17', 'Apr 18', 'Apr 19', 'Apr 20', 'Apr 21', 'Apr 22', 'Apr 23', 'Apr 24', 'Apr 25', 'Apr 26', 'Apr 27', 'Apr 28', 'Apr 29', 'Apr 30', 'May 1', 'May 2', 'May 3', 'May 4', 'May 5', 'May 6', 'May 7', 'May 8', 'May 9', 'May 10', 'May 11', 'May 12', 'May 13', 'May 14', 'May 15', 'May 16', 'May 17', 'May 18', 'May 19', 'May 20', 'May 21', 'May 22', 'May 23', 'May 24', 'May 25', 'May 26', 'May 27', 'May 28', 'May 29', 'May 30', 'May 31'];
+const TODAY = "Mar 29";
+const TODAY_IDX = MONTH_DATES.indexOf(TODAY);
+const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function dlToAbsDay(dl) {
+  const [m,d] = dl.split(" ");
+  const n = parseInt(d);
+  if (m==="Mar") return n;
+  if (m==="Apr") return 31+n;
+  if (m==="May") return 61+n;
+  return n;
+}
+// March 1 2026 = Sunday (index 0); formula: (absDay-1) % 7
+function getDayName(dl) { return DAY_NAMES[(dlToAbsDay(dl)-1) % 7]; }
+
+// ── Mutable state ────────────────────────────────────
+let activeSite = "CCL";
+let weekStart = Math.max(0, TODAY_IDX - 3);
+let selectedDate = TODAY;
+let plannedLoads   = {};    // {siteKey: {dateLabel: {hr: amt}}}
+let plannedDrivers = {};    // {siteKey: {dateLabel: {hr: driverName}}}
+let burnOverrides  = {};    // {siteKey: {dateLabel: hourlyRate}}
+
+// ── Data accessors ───────────────────────────────────
+function getEmbed(sk, dl) { return (EMBEDDED_DATA[sk]||{})[dl]||null; }
+
+function getBurnRate(sk, dl) {
+  // User override takes priority
+  if (burnOverrides[sk] && burnOverrides[sk][dl] != null) return burnOverrides[sk][dl];
+  const e = getEmbed(sk, dl);
+  if (e && e.br > 0) return e.br;
+  // Fall back to nearest previous day's rate
+  const idx = MONTH_DATES.indexOf(dl);
+  for (let i = idx-1; i >= 0; i--) {
+    const prev = getEmbed(sk, MONTH_DATES[i]);
+    if (prev && prev.br > 0) return prev.br;
+  }
+  return 5;
+}
+
+function setBurnRate(sk, dl, hrRate) {
+  if (!burnOverrides[sk]) burnOverrides[sk] = {};
+  if (hrRate === null) { delete burnOverrides[sk][dl]; }
+  else { burnOverrides[sk][dl] = hrRate; }
+  renderAll();
+}
+
+function getHistLoads(sk, dl) { const e=getEmbed(sk,dl); return e&&e.loads ? e.loads : {}; }
+function getPlanLoads(sk, dl) { return ((plannedLoads[sk]||{})[dl])||{}; }
+
+function getStartLevel(sk, dl) {
+  const e = getEmbed(sk, dl);
+  if (e && e.lv !== null) return e.lv;
+  // Simulate from previous day's end
+  const idx = MONTH_DATES.indexOf(dl);
+  if (idx <= 0) return null;
+  return getLevelAt(sk, MONTH_DATES[idx-1], 23);
+}
+
+function getLevelAt(sk, dl, hr) {
+  const start = getStartLevel(sk, dl);
+  if (start === null) return null;
+  const br = getBurnRate(sk, dl);
+  let lv = start - br * hr;
+  for (const [h,a] of Object.entries(getHistLoads(sk,dl))) { if (parseInt(h)<=hr) lv+=parseFloat(a); }
+  for (const [h,a] of Object.entries(getPlanLoads(sk,dl)))  { if (parseInt(h)<=hr) lv+=parseFloat(a); }
+  return Math.round(lv * 10) / 10;
+}
+
+// ── Capacity check ───────────────────────────────────
+function getBulletConflict(sk, dl, hr) {
+  if (!SITES[sk].singleBullet) return null;
+  const allLoads = {...getHistLoads(sk, dl), ...getPlanLoads(sk, dl)};
+  for (const h of Object.keys(allLoads)) {
+    const hInt = parseInt(h);
+    if (hInt !== hr && Math.abs(hr - hInt) < 3) return hInt;
+  }
+  return null;
+}
+
+function checkAddLoad(sk, dl, hr) {
+  const site = SITES[sk];
+  // Single-bullet check: loads must be at least 3 hrs apart
+  if (site.singleBullet) {
+    const conflictHr = getBulletConflict(sk, dl, hr);
+    if (conflictHr !== null) {
+      return {
+        ok: false,
+        reason: `1-bullet plant — load at ${String(conflictHr).padStart(2,'0')}:00 is within 3 hrs`,
+        conflict: true
+      };
+    }
+  }
+  let peakLv = -Infinity;
+  let peakHr = hr;
+  for (let h = hr; h < 24; h++) {
+    const cur = getLevelAt(sk, dl, h) + site.loadSize;
+    if (cur > peakLv) { peakLv = cur; peakHr = h; }
+  }
+  if (peakLv > site.highLevel) {
+    return {
+      ok: false,
+      reason: `Would reach ${peakLv.toFixed(1)} m³ at ${String(peakHr).padStart(2,'0')}:00 (limit ${site.highLevel} m³)`,
+      peakLv
+    };
+  }
+  return { ok: true, reason: null, peakLv };
+}
+
+function getDayPeak(sk, dl) {
+  let peak = -Infinity;
+  for (let h = 0; h < 24; h++) {
+    const lv = getLevelAt(sk, dl, h);
+    if (lv !== null && lv > peak) peak = lv;
+  }
+  return peak === -Infinity ? null : peak;
+}
+
+function isAtCapacity(sk, dl) {
+  const site = SITES[sk];
+  const peak = getDayPeak(sk, dl);
+  return peak !== null && peak >= site.highLevel * 0.97;
+}
+
+// ── Planned load management ──────────────────────────
+function toggleLoad(dl, hr, delta) {
+  if (!plannedLoads[activeSite]) plannedLoads[activeSite] = {};
+  if (!plannedLoads[activeSite][dl]) plannedLoads[activeSite][dl] = {};
+  if (!plannedDrivers[activeSite]) plannedDrivers[activeSite] = {};
+  if (!plannedDrivers[activeSite][dl]) plannedDrivers[activeSite][dl] = {};
+  const cur = plannedLoads[activeSite][dl][hr] || 0;
+  const next = cur + delta;
+  if (next <= 0) {
+    delete plannedLoads[activeSite][dl][hr];
+    delete plannedDrivers[activeSite][dl][hr];
+  } else {
+    // Cap at exactly one load (loadSize) — no stacking multiple loads on the same hour
+    plannedLoads[activeSite][dl][hr] = SITES[activeSite].loadSize;
+    // Prompt for driver name if not already set
+    if (!plannedDrivers[activeSite][dl][hr]) {
+      const name = window.prompt(`Driver name for ${dl} ${String(hr).padStart(2,'0')}:00? (optional)`);
+      if (name && name.trim()) plannedDrivers[activeSite][dl][hr] = name.trim();
+    }
+  }
+  renderAll();
+}
+
+function updatePlannedDriver(dl, hr, name) {
+  if (!plannedDrivers[activeSite]) plannedDrivers[activeSite] = {};
+  if (!plannedDrivers[activeSite][dl]) plannedDrivers[activeSite][dl] = {};
+  if (name && name.trim()) {
+    plannedDrivers[activeSite][dl][hr] = name.trim();
+  } else {
+    delete plannedDrivers[activeSite][dl][hr];
+  }
+}
+
+function getTotalPlanLoads(sk) {
+  if (!plannedLoads[sk]) return 0;
+  return Object.values(plannedLoads[sk]).reduce((s,d)=>s+Object.keys(d).length,0);
+}
+
+// ── Zone helpers ─────────────────────────────────────
+function getZone(site, lv) {
+  for (const z of site.zones) if (lv <= z.max) return z;
+  return site.zones[site.zones.length-1];
+}
+function zoneColor(site, lv) { return getZone(site, lv).color; }
+
+// ── Auto-schedule ────────────────────────────────────
+function autoSchedule() {
+  const site = SITES[activeSite];
+  for (const dl of MONTH_DATES.slice(TODAY_IDX+1)) {
+    let hr = 6;
+    while (hr <= 20) {
+      const chk = checkAddLoad(activeSite, dl, hr);
+      if (chk.ok) {
+        toggleLoad(dl, hr, site.loadSize);
+        // For single-bullet sites, next truck can't arrive for 3 hrs
+        hr += site.singleBullet ? 3 : 1;
+      } else if (chk.conflict) {
+        // Bullet is occupied — skip ahead to avoid the conflict
+        hr++;
+      } else {
+        hr++;
+      }
+    }
+  }
+  renderAll();
+}
+
+// ── Render helpers ───────────────────────────────────
+function pct(lv, absMax) { return Math.min(100, Math.max(0, lv/absMax*100)).toFixed(1); }
+
+function renderSiteTabs() {
+  document.getElementById("siteTabs").innerHTML =
+    Object.values(SITES).map(s =>
+      `<div class="site-tab ${s.key===activeSite?'active':''}" onclick="selectSite('${s.key}')">${s.name}</div>`
+    ).join("");
+}
+
+function renderLegend() {
+  const site = SITES[activeSite];
+  document.getElementById("zoneLegend").innerHTML =
+    site.zones.map(z =>
+      `<div class="legend-item"><div class="legend-dot" style="background:${z.color}"></div><span>${z.label}</span></div>`
+    ).join("");
+}
+
+function renderSummary() {
+  const site = SITES[activeSite];
+  const hr = new Date().getHours();
+  const lv = getLevelAt(activeSite, TODAY, hr);
+  const br = getBurnRate(activeSite, TODAY);
+  const capPct = lv !== null ? (lv/site.absMax*100).toFixed(0) : null;
+
+  document.getElementById("sumSite").textContent = site.name;
+  document.getElementById("sumLevel").textContent = lv !== null ? `${lv.toFixed(1)} m³ (${capPct}%)` : "—";
+  document.getElementById("sumBurnHr").textContent = br.toFixed(1);
+  document.getElementById("sumBurnDay").textContent = (br*24).toFixed(0);
+  document.getElementById("sumPlanned").textContent = getTotalPlanLoads(activeSite);
+  document.getElementById("sumHigh").textContent = site.highLevel;
+
+  const lvStat = document.getElementById("sumLevelStat");
+  if (lv !== null) {
+    const zone = getZone(site, lv);
+    lvStat.querySelector("span").style.color = zone.color;
+  }
+
+  const capStat = document.getElementById("sumCapStat");
+  if (lv !== null && lv >= site.highLevel * 0.9) {
+    capStat.style.display = "";
+    document.getElementById("sumCap").textContent =
+      lv >= site.highLevel ? "Tank at/above high level!" : "Approaching high level";
+  } else {
+    capStat.style.display = "none";
+  }
+}
+
+function renderWeekNav() {
+  const s = MONTH_DATES[weekStart];
+  const e = MONTH_DATES[Math.min(weekStart+6, MONTH_DATES.length-1)];
+  document.getElementById("weekLabel").textContent = s + " – " + e;
+}
+
+function renderDayGrid() {
+  const site = SITES[activeSite];
+  const visible = MONTH_DATES.slice(weekStart, weekStart+7);
+  document.getElementById("dayGrid").innerHTML = visible.map(dl => {
+    const startLv = getLevelAt(activeSite, dl, 0);
+    const endLv   = getLevelAt(activeSite, dl, 23);
+    const peak    = getDayPeak(activeSite, dl);
+    const br      = getBurnRate(activeSite, dl);
+    const p = startLv !== null ? pct(startLv, site.absMax) : 0;
+    const col = startLv !== null ? zoneColor(site, startLv) : "#444";
+    const isToday = dl===TODAY, isSel = dl===selectedDate;
+    const hist = Object.keys(getHistLoads(activeSite,dl)).length;
+    const plan = Object.keys(getPlanLoads(activeSite,dl)).length;
+    const atCap = isAtCapacity(activeSite, dl);
+    const overHigh = peak !== null && peak >= site.highLevel;
+
+    return `
+      <div class="day-card ${isToday?'today':''} ${isSel?'selected':''} ${overHigh?'at-capacity':''}"
+           onclick="selectDate('${dl}')">
+        <div class="day-name">${getDayName(dl)}</div>
+        <div class="day-date ${isToday?'today-lbl':''}">${dl}${isToday?' ★':''}</div>
+        <div class="level-bar-wrap">
+          <div class="level-bar" style="width:${p}%;background:${col}"></div>
+        </div>
+        <div class="day-stats">
+          Start: <span>${startLv!==null?startLv.toFixed(0):'—'}</span> m³<br>
+          End: <span style="color:${endLv!==null?zoneColor(site,endLv):'#888'}">${endLv!==null?endLv.toFixed(0):'—'}</span> m³<br>
+          <span class="burn-rate">🔥 ${br.toFixed(2)} m³/hr · ${(br*24).toFixed(1)} m³/day${burnOverrides[activeSite]&&burnOverrides[activeSite][dl]!=null?' ✎':''}</span>
+        </div>
+        <div class="badge-wrap">
+          ${(hist+plan)>0 ? `<div class="load-badge">${hist+plan}🚚</div>` : ''}
+          ${overHigh ? `<div class="full-badge">⛔ FULL</div>` : (atCap ? `<div class="full-badge" style="background:var(--orange)">≈ FULL</div>` : '')}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderDetailPanel() {
+  const panel = document.getElementById("detailPanel");
+  if (!selectedDate) { panel.className="detail-panel"; return; }
+  panel.className = "detail-panel visible";
+
+  const site = SITES[activeSite];
+  const dl = selectedDate;
+  const br = getBurnRate(activeSite, dl);
+  const brDay = (br*24).toFixed(1);
+  const hasOverride = burnOverrides[activeSite] && burnOverrides[activeSite][dl] != null;
+  const startLv = getStartLevel(activeSite, dl);
+  const peak = getDayPeak(activeSite, dl);
+  const histLoads = getHistLoads(activeSite, dl);
+  const planLoads = getPlanLoads(activeSite, dl);
+  const overHigh = peak !== null && peak >= site.highLevel;
+  const nearHigh = peak !== null && peak >= site.highLevel * 0.9 && !overHigh;
+
+  let capHtml = '';
+  if (overHigh) {
+    capHtml = `<div class="capacity-bar full visible">⛔ Tank is at or above high level (${site.highLevel} m³) — no further loads can be added this day. Peak: ${peak!==null?peak.toFixed(1):'—'} m³</div>`;
+  } else if (nearHigh) {
+    capHtml = `<div class="capacity-bar warn visible">⚠ Tank is approaching the high level (${site.highLevel} m³). Some hours may not accept more loads. Peak: ${peak!==null?peak.toFixed(1):'—'} m³</div>`;
+  }
+
+  let rows = '';
+  for (let hr = 0; hr < 24; hr++) {
+    const lv = getLevelAt(activeSite, dl, hr);
+    const prevLv = hr===0 ? startLv : getLevelAt(activeSite, dl, hr-1);
+    const chg = lv!==null && prevLv!==null ? lv-prevLv : null;
+    const col = lv!==null ? zoneColor(site,lv) : '#888';
+    const p = lv!==null ? pct(lv, site.absMax) : 0;
+    const capLinePct = (site.highLevel/site.absMax*100).toFixed(1);
+    const isOver = lv!==null && lv>site.highLevel;
+    const isLow  = lv!==null && lv<site.safeLow;
+
+    const hist = histLoads[hr];
+    const plan = planLoads[hr];
+
+    const chkResult = checkAddLoad(activeSite, dl, hr);
+    let actionCell = '';
+    if (hist) {
+      const bulletConflict = getBulletConflict(activeSite, dl, hr);
+      const conflictWarn = bulletConflict !== null
+        ? `<span class="conflict-badge">⚠ Conflict: ${String(bulletConflict).padStart(2,'0')}:00 within 3 hrs</span>`
+        : '';
+      const drvMap = (getEmbed(activeSite,dl)||{}).drivers||{};
+      const drvName = drvMap[hr] ? `<span class="drv-name">${drvMap[hr]}</span>` : '';
+      actionCell = `<span class="hist-badge">+${hist}m³ ✓</span>${drvName}${conflictWarn}`;
+    } else if (plan) {
+      const bulletConflict = getBulletConflict(activeSite, dl, hr);
+      const conflictWarn = bulletConflict !== null
+        ? `<span class="conflict-badge">⚠ Conflict: ${String(bulletConflict).padStart(2,'0')}:00 within 3 hrs</span>`
+        : '';
+      const planDrvMap = (plannedDrivers[activeSite]||{})[dl]||{};
+      const planDrvName = planDrvMap[hr] || '';
+      actionCell = `
+        <span class="plan-badge">+${plan}m³ 📋</span>
+        <input class="drv-input" type="text" placeholder="Driver…" value="${planDrvName}"
+          oninput="updatePlannedDriver('${dl}',${hr},this.value)" title="Driver name">
+        ${conflictWarn}
+        <button class="remove-btn" onclick="toggleLoad('${dl}',${hr},-${site.loadSize})">✕ Remove</button>`;
+    } else if (chkResult.ok) {
+      actionCell = `<button class="add-btn" onclick="toggleLoad('${dl}',${hr},${site.loadSize})">+ Add Load</button>`;
+    } else {
+      const isBulletBlock = chkResult.conflict;
+      actionCell = `
+        <button class="add-btn" disabled data-tip="${chkResult.reason}">${isBulletBlock ? '🚫 1-Bullet' : '⛔ Full'}</button>
+        <span class="block-reason">${chkResult.reason}</span>`;
+    }
+
+    rows += `
+      <tr class="${isOver?'over-row':''} ${isLow?'warn-row':''}">
+        <td class="time-cell">${String(hr).padStart(2,'0')}:00</td>
+        <td class="level-cell" style="color:${col}">${lv!==null?lv.toFixed(1):'—'}</td>
+        <td class="cap-pct" style="color:${col}">${lv!==null?(lv/site.absMax*100).toFixed(0)+'%':'—'}</td>
+        <td class="change-cell" style="color:${chg!==null?(chg>=0?'#4caf9e':'#ff8888'):'#888'}">
+          ${chg!==null?(chg>=0?'+':'')+chg.toFixed(1):'—'}
+        </td>
+        <td class="bar-cell">
+          <div class="mini-bar-wrap">
+            <div class="mini-bar" style="width:${p}%;background:${col}"></div>
+            <div class="cap-line" style="left:${capLinePct}%"></div>
+          </div>
+        </td>
+        <td class="action-cell">${actionCell}</td>
+      </tr>`;
+  }
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-title">📅 ${dl} — ${site.name}</div>
+      <div class="detail-actions">
+        <button class="btn btn-gold" onclick="autoSchedule()">⚡ Auto-Schedule Future</button>
+        <button class="btn btn-muted" onclick="clearPlanned()">🗑 Clear Changes</button>
+        <button class="btn btn-teal" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+
+    <div class="burn-editor">
+      <label>🔥 Burn Rate for ${dl}:</label>
+      <div class="burn-inputs">
+        <div class="burn-input-group" data-tip="Edit hourly burn rate">
+          <span>Hourly</span>
+          <input class="burn-input" id="brHrInput" type="number" step="0.1" min="0" max="200"
+            value="${br.toFixed(2)}"
+            onchange="onBurnHrChange(this.value)"
+            oninput="syncBurnDay(this.value)">
+          <span class="burn-unit">m³/hr</span>
+        </div>
+        <div class="burn-input-group" data-tip="Edit daily burn rate">
+          <span>Daily</span>
+          <input class="burn-input" id="brDayInput" type="number" step="0.5" min="0" max="5000"
+            value="${brDay}"
+            onchange="onBurnDayChange(this.value)"
+            oninput="syncBurnHr(this.value)">
+          <span class="burn-unit">m³/day</span>
+        </div>
+        <button class="burn-reset" onclick="resetBurnRate('${dl}')" title="Reset to computed value">↺ Reset</button>
+        <span class="burn-override-note ${hasOverride?'visible':''}" id="burnOverrideNote">✎ Overridden</span>
+      </div>
+    </div>
+
+    ${capHtml}
+
+    <div style="font-size:.79em;color:var(--muted);margin-bottom:10px;">
+      High limit: <strong style="color:var(--red)">${site.highLevel} m³</strong> ·
+      Safe zone: <strong style="color:var(--teal)">${site.safeLow}–${site.safeHigh} m³</strong> ·
+      Capacity: <strong style="color:var(--text)">${site.absMax} m³</strong> ·
+      ✓ actual · 📋 planned · red line = high limit
+    </div>
+
+    <table class="hour-table">
+      <thead>
+        <tr>
+          <th>Hour</th><th>Level (m³)</th><th>% Full</th><th>Δ Change</th>
+          <th>Fill Bar</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Burn rate input handlers ─────────────────────────
+function syncBurnDay(hrVal) {
+  const hrInput = document.getElementById("brDayInput");
+  if (hrInput) hrInput.value = (parseFloat(hrVal)*24).toFixed(1);
+}
+function syncBurnHr(dayVal) {
+  const hrInput = document.getElementById("brHrInput");
+  if (hrInput) hrInput.value = (parseFloat(dayVal)/24).toFixed(2);
+}
+function onBurnHrChange(val) {
+  const rate = parseFloat(val);
+  if (!isNaN(rate) && rate >= 0) setBurnRate(activeSite, selectedDate, rate);
+}
+function onBurnDayChange(val) {
+  const rate = parseFloat(val)/24;
+  if (!isNaN(rate) && rate >= 0) setBurnRate(activeSite, selectedDate, rate);
+}
+function resetBurnRate(dl) {
+  setBurnRate(activeSite, dl, null);
+}
+
+// ── Actions ──────────────────────────────────────────
+function selectSite(key) {
+  activeSite = key;
+  selectedDate = TODAY;
+  weekStart = Math.max(0, TODAY_IDX-3);
+  renderAll();
+}
+function selectDate(dl) {
+  selectedDate = dl;
+  renderAll();
+  setTimeout(()=>document.getElementById("detailPanel").scrollIntoView({behavior:"smooth",block:"nearest"}),50);
+}
+function shiftWeek(dir) {
+  weekStart = Math.max(0, Math.min(MONTH_DATES.length-7, weekStart+dir*7));
+  renderAll();
+}
+function clearPlanned() {
+  if (confirm("Clear all planned loads for " + activeSite + "?")) {
+    plannedLoads[activeSite] = {};
+    plannedDrivers[activeSite] = {};
+    renderAll();
+  }
+}
+function exportCSV() {
+  const site = SITES[activeSite];
+  let csv = "Date,Hour,Level m3,% Full,Burn Rate m3/hr,Planned Load m3,Historical Load m3\n";
+  for (const dl of MONTH_DATES) {
+    const br = getBurnRate(activeSite, dl);
+    for (let hr = 0; hr < 24; hr++) {
+      const lv = getLevelAt(activeSite, dl, hr);
+      const plan = (getPlanLoads(activeSite,dl)[hr])||"";
+      const hist = (getHistLoads(activeSite,dl)[hr])||"";
+      const pctFull = lv!==null ? (lv/site.absMax*100).toFixed(1) : "";
+      csv += `${dl},${String(hr).padStart(2,'0')}:00,${lv!==null?lv.toFixed(1):''},${pctFull},${br.toFixed(2)},${plan},${hist}\n`;
+    }
+  }
+  const blob = new Blob([csv],{type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "Butane_Schedule_" + activeSite + ".csv";
+  a.click();
+}
+
+function renderAll() {
+  renderSiteTabs();
+  renderLegend();
+  renderSummary();
+  renderWeekNav();
+  renderDayGrid();
+  renderDetailPanel();
+}
+
+// ── Init ──────────────────────────────────────────────
+weekStart = Math.max(0, TODAY_IDX-3);
+renderAll();
+</script>
+</body>
+</html>
